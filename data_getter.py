@@ -1,9 +1,29 @@
 import requests
 import yaml
 import json
+import numpy as np
+import pandas as pd
+import torch
 
-api_key_file = yaml.safe_load(open('api_keys.yaml'))
+def fetch_btc_prices():
+    with open("BTC_data.json") as f:
+        return json.load(f)
 
-data = requests.get('https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=MSFT&apikey={}'.format(api_key_file['alphakey']))
-data = data.json()
-print(data)
+def parse_alphaV_JSON(raw_data):
+    raw_data.pop('Meta Data',None)
+
+    df = pd.DataFrame.from_dict(raw_data['Time Series (Digital Currency Daily)'])
+    df = df.transpose()
+    print(df)
+
+    pass
+
+def main():
+    raw_price_data = fetch_btc_prices()
+    parse_alphaV_JSON(raw_data=raw_price_data)
+    
+
+    pass
+
+if __name__ == '__main__':
+    main()
