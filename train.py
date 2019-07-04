@@ -59,10 +59,18 @@ def data_split(x_train,y_train):
         x_train, x_test, y_train, y_test = train_test_split(x_train,y_train,test_size=0.2,random_state=100,shuffle=False)
         return x_train, x_test, y_train, y_test
 
-def train(model, x_data,y_data):
 
-    min_max_scaler = preprocessing.MinMaxScaler()
-    min_max_scaler.fit_transform(y_data)
+def un_normalize(norm_val,min_val,max_val):
+    return norm_val * (max_val - min_val) + min_val
+
+def train(model, x_data,y_data, original_prices):
+
+    prices = torch.tensor(original_prices)
+    max_price = torch.max(prices)
+    min_price = torch.min(prices)
+
+    #min_max_scaler = preprocessing.MinMaxScaler()
+    #min_max_scaler.fit_transform(y_data)
 
     # x_train, x_test, y_train, y_test = data_split(x_train,y_train)
 
@@ -101,7 +109,7 @@ def train(model, x_data,y_data):
 
     # -- Optimizer --> Adam generally works best
     # TODO: choose a better learning rate later
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     total_loss = 0
     for epoch in (range(100)):
@@ -122,9 +130,10 @@ def train(model, x_data,y_data):
             optimizer.step()
 
             y_preds = y_predictions.detach().numpy()
-            print(y_preds.shape)
-            test = min_max_scaler.inverse_transform(y_preds)
-            print(test)
+            y_preds = torch.tensor(y_preds)
+            #print(y_preds.shape)
+            test = un_normalize(y_preds, min_price, max_price)
+            print("---> ", test)
 
             break
 
@@ -142,7 +151,7 @@ def table_edit(dataframe):
 def main():
     raw_price_data = fetch_btc_prices()
     data_df = parse_alphaV_JSON(raw_data=raw_price_data)
-
+    prices = np.array(data_df['4a. close (USD)'].tolist())
     # -- Normalize the Data --
     min_max_scaler = preprocessing.MinMaxScaler()
     data_df = pd.DataFrame(min_max_scaler.fit_transform(data_df), columns=data_df.columns)
@@ -154,7 +163,7 @@ def main():
     
     model = MLP()
 
-    train(model, data_df.values,y_train)
+    train(model, data_df.values,y_train,prices)
 
     pass
 
