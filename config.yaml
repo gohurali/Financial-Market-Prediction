@@ -1,1 +1,3 @@
-# todo
+### MLP ###
+mlp_batch_size : 1
+mlp_epochs : 50

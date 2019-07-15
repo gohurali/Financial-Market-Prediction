@@ -23,10 +23,17 @@ class MLP(nn.Module):
         self.fc3 = nn.Linear(in_features=128,out_features=1)
     
     def forward(self, x):
-        """"Forward pass definition"""
+        """Forward pass definition"""
         x = F.leaky_relu(self.fc1(x))
         x = F.leaky_relu(self.fc2(x))
         x = F.leaky_relu(self.fc3(x))
+        return x
+
+class TimeSeriesRNN(nn.Module):
+    def __init__(self):
+        super(TimeSeriesRNN,self).__init__()
+        pass
+    def forward(self,x):
         return x
 
 class TickerData(torch.utils.data.Dataset):
