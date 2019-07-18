@@ -1,3 +1,4 @@
 ### MLP ###
 mlp_batch_size : 1
 mlp_epochs : 50
+mlp_learning_rate : 0.001
