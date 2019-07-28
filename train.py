@@ -1,4 +1,5 @@
 import requests
+import os
 import yaml
 import json
 import numpy as np
@@ -7,33 +8,107 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data
+#from torch.utils.tensorboard import SummaryWriter
 import sklearn
 from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+import urllib3
+import cryptocompare
+from datetime import datetime
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#print("Device state:\t", device)
+#print("Device index:\t",torch.cuda.current_device())
+#print("Current device:\t", torch.cuda.get_device_name(device))
+
 """
 Basic multilayer perceptron subclass 
 of three layers in PyTorch
 """
 class MLP(nn.Module):
-    def __init__(self):
+    def __init__(self,num_features):
         super(MLP,self).__init__()
-        self.fc1 = nn.Linear(in_features=5,out_features=32)
+        self.fc1 = nn.Linear(in_features=num_features,out_features=32)
         self.fc2 = nn.Linear(in_features=32,out_features=128)
         self.fc3 = nn.Linear(in_features=128,out_features=1)
     
     def forward(self, x):
-        """Forward pass definition"""
+        """"Forward pass definition"""
+        x = F.leaky_relu(self.fc1(x))
+        x = F.leaky_relu(self.fc2(x))
+        x = F.leaky_relu(self.fc3(x))
+        return x
+      
+class NumberRegression_MLP(nn.Module):
+    def __init__(self):
+        super(NumberRegression_MLP,self).__init__()
+        self.fc1 = nn.Linear(in_features=1,out_features=32)
+        self.fc2 = nn.Linear(in_features=32,out_features=128)
+        self.fc3 = nn.Linear(in_features=128,out_features=1)
+    def forward(self, x):
+        """"Forward pass definition"""
         x = F.leaky_relu(self.fc1(x))
         x = F.leaky_relu(self.fc2(x))
         x = F.leaky_relu(self.fc3(x))
         return x
 
-class TimeSeriesRNN(nn.Module):
-    def __init__(self):
-        super(TimeSeriesRNN,self).__init__()
+"""
+Recurrent Neural Networks (RNN)
+RNNs are an excellent method to model sequential data
+and time series data. This is perfect for stocks and
+crytocurrency price prediction.
+"""
+class TestRNN(nn.Module):
+    def __init__(self,input_dim,hidden_dim,layer_amnt):
+        super(TestRNN,self).__init__()
+        
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.layer_amnt = layer_amnt
+        
+        self.lstm1 = nn.LSTM(input_size=self.input_dim,
+                             hidden_size=self.hidden_dim,
+                             num_layers=1,
+                             bias=True,
+                             batch_first=False,
+                             dropout=0,
+                             bidirectional=False
+                            )
+        self.fc1 = nn.Linear(in_features=150,out_features=256)
+        self.fc2 = nn.Linear(in_features=256,out_features=128)
+        self.fc3 = nn.Linear(in_features=128,out_features=32)
+        self.fc4 = nn.Linear(in_features=32,out_features=1)
+        
         pass
     def forward(self,x):
+        pass
+      
+"""
+Temporal Convolutional Neural Network (CNN)
+Time series based convolutional neural network
+"""
+class TimeCNN(nn.Module):
+    def __init__(self):
+        super(TimeCNN,self).__init__()
+        self.conv1 = nn.Conv1d(in_channels=1,out_channels=256,kernel_size=2,stride=1,padding=0)
+        self.mp1 = nn.MaxPool1d(kernel_size=2,stride=1)
+        self.conv2 = nn.Conv1d(in_channels=128,out_channels=256,kernel_size=3,stride=1,padding=0)
+        self.mp2 = nn.MaxPool1d(kernel_size=2,stride=1)
+        self.fc1 = nn.Linear(in_features=512,out_features=512)
+        self.fc2 = nn.Linear(in_features=512,out_features=128)
+        self.fc3 = nn.Linear(in_features=128,out_features=1)
+    def forward(self,x):
+        x = x.unsqueeze(0)
+        x = F.leaky_relu(self.conv1(x))
+        #x = self.mp1(x)
+        #x = F.relu(self.conv2(x))
+        #x = self.mp2(x)
+        x = x.reshape(-1)
+        x = F.leaky_relu(self.fc1(x))
+        x = F.leaky_relu(self.fc2(x))
+        x = F.leaky_relu(self.fc3(x))
         return x
 
 class TickerData(torch.utils.data.Dataset):
@@ -45,134 +120,232 @@ class TickerData(torch.utils.data.Dataset):
         """idx --> data pointer"""
         return self.dataset[idx]
 
-def fetch_btc_prices():
-    with open("BTC_data.json") as f:
-        return json.load(f)
+def get_config(file_loc='config.yaml'):
+    return yaml.safe_load(open(file_loc))
 
-def parse_alphaV_JSON(raw_data):
-    # Remove meta data for now
-    raw_data.pop('Meta Data',None)
-    # Remove key name
-    df = pd.DataFrame.from_dict(raw_data['Time Series (Digital Currency Daily)'],dtype=float)
-    # Flip dates as columns into rows
-    df = df.transpose()
-    return df
+class Trainer(object):
+    def __init__(self):
+        pass
 
-def normalize():
-    pass
+    def fetch_latest_BTC_JSON(self):
+        """Fetch the latest JSON data"""
+        API_LINK = 'https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY&symbol=BTC&market=USD&apikey=SAITMI5ZUMGEKGKY'
+        page = requests.get(API_LINK).json()
+        return page
 
+    def parse_alphaV_JSON(self,raw_data):
+        # Remove meta data for now
+        raw_data.pop('Meta Data',None)
+        # Remove key name
+        df = pd.DataFrame.from_dict(raw_data['Time Series (Digital Currency Daily)'],dtype=float)
+        # Flip dates as columns into rows
+        df = df.transpose()
+        return df
 
-def data_split(x_train,y_train):
-        x_train, x_test, y_train, y_test = train_test_split(x_train,y_train,test_size=0.2,random_state=100,shuffle=False)
-        return x_train, x_test, y_train, y_test
+    def normalize(self):
+        pass
+    
+    def data_split(self,x_train,y_train):
+            x_train, x_test, y_train, y_test = train_test_split(x_train,y_train,test_size=0.2,random_state=100,shuffle=False)
+            return x_train, x_test, y_train, y_test
+    
+    def train(self,model, x_data,y_data, original_prices):
 
+        prices = torch.tensor(original_prices)
+        max_price = torch.max(prices)
+        min_price = torch.min(prices)
 
-def un_normalize(norm_val,min_val,max_val):
-    return norm_val * (max_val - min_val) + min_val
+        print('----Dataset Prep----')
+        x_train, x_test, y_train, y_test = self.data_split(x_data,y_data)
+        train_tensorDataset = torch.utils.data.TensorDataset(torch.from_numpy(x_train),torch.from_numpy(y_train))
+        train_data_loader = torch.utils.data.DataLoader(
+            dataset=train_tensorDataset,
+            batch_size=1,
+            shuffle=False,
+            num_workers=0
+        )
 
-def train(model, x_data,y_data, original_prices):
+        test_tensorDataset = torch.utils.data.TensorDataset(torch.Tensor(x_test),torch.Tensor(y_test))
+        test_data_loader = torch.utils.data.DataLoader(
+            dataset=test_tensorDataset,
+            batch_size=1,
+            shuffle=False,
+            num_workers=0
+        )
 
-    prices = torch.tensor(original_prices)
-    max_price = torch.max(prices)
-    min_price = torch.min(prices)
+        print('-- Model Architecture --')
+        print(model)
+        
+        # -- Model to CUDA GPU --
+        if( str(device) == 'cuda'):
+            print('Sending model to',torch.cuda.get_device_name(device),' GPU')
+            model = model.cuda()
+        #model.to(device)
 
-    #min_max_scaler = preprocessing.MinMaxScaler()
-    #min_max_scaler.fit_transform(y_data)
+        # -- Since we are predicting prices --> mean squared error is our loss function
+        loss_func = torch.nn.MSELoss()
 
-    # x_train, x_test, y_train, y_test = data_split(x_train,y_train)
+        # -- Optimizer --> Adam generally works best
+        # TODO: choose a better learning rate later
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-    # # Prep input data --> torch.float64
-    # x_train = torch.from_numpy(x_train)
-    # y_train = torch.from_numpy(y_train)
-
-    # print(x_train.dtype)
-    # print(y_train.dtype)
-    # print(x_test.shape)
-    # print(x_test.shape)
-
-    print('----Dataset Prep----')
-    x_train, x_test, y_train, y_test = data_split(x_data,y_data)
-    train_tensorDataset = torch.utils.data.TensorDataset(torch.from_numpy(x_train),torch.from_numpy(y_train))
-    train_data_loader = torch.utils.data.DataLoader(
-        dataset=train_tensorDataset,
-        batch_size=1,
-        shuffle=False,
-        num_workers=0
-    )
-
-    test_tensorDataset = torch.utils.data.TensorDataset(torch.Tensor(x_test),torch.Tensor(y_test))
-    test_data_loader = torch.utils.data.DataLoader(
-        dataset=test_tensorDataset,
-        batch_size=1,
-        shuffle=False,
-        num_workers=0
-    )
-
-    print('-- Model Architecture --')
-    print(model)
-
-    # -- Since we are predicting prices --> mean squared error is our loss function
-    loss_func = torch.nn.MSELoss()
-
-    # -- Optimizer --> Adam generally works best
-    # TODO: choose a better learning rate later
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-
-    total_loss = 0
-    for epoch in (range(100)):
-        for i, (examples,labels) in tqdm(enumerate(train_data_loader)):
-
-            #print(examples , " ----- " , labels)
+        total_loss = 0
+        losses = []
+        for epoch in (range(200)):
+            for i, (examples,labels) in tqdm(enumerate(train_data_loader)):
             
-            optimizer.zero_grad()
+                if( str(device) == 'cuda'):
+                    examples = examples.to(device)
+                    labels = labels.to(device)
 
-            y_predictions = model(examples.float())
-            loss = loss_func(y_predictions.float(),labels.float())
+                optimizer.zero_grad()
+     
+                y_predictions = model(examples.float())
+                loss = loss_func(y_predictions.float(),labels.float())
 
-            total_loss += loss.data
+                total_loss += loss.data
 
-            # back-prop to update the weights
-            loss.backward()
-            # optimizer steps based on lr
-            optimizer.step()
+                # back-prop to update the weights
+                loss.backward()
+                # optimizer steps based on lr
+                optimizer.step()
 
-            y_preds = y_predictions.detach().numpy()
-            y_preds = torch.tensor(y_preds)
-            #print(y_preds.shape)
-            test = un_normalize(y_preds, min_price, max_price)
-            print("---> ", test)
+                y_preds = y_predictions.cpu().detach().numpy()
+                y_preds = torch.tensor(y_preds)
+                #print(y_preds.shape)
+                test = self.un_normalize(y_preds, min_price, max_price)
+                #print("---> ", test)
+                #break
 
-            break
+            print ('Epoch [{}/{}], Loss: {}'.format(epoch+1, 100, loss.data))
+            #print(list(model.parameters()))
+            print("-----------------------------------------------------------------------------")
+            losses.append(loss.data)
+        return losses, test_data_loader, loss_func, model, min_price, max_price, y_test
+    
+    def table_edit(self,dataframe):
+        dataframe = dataframe.drop(labels=['1b. open (USD)','2b. high (USD)','3b. low (USD)','4b. close (USD)'],axis=1)
+        table_col_order = ['1a. open (USD)','2a. high (USD)','3a. low (USD)','5. volume','6. market cap (USD)','4a. close (USD)']
+        dataframe = dataframe[table_col_order]
+        return dataframe
 
-        print ('Epoch [{}/{}], Loss: {}'.format(epoch+1, 100, loss.data))
-        #print(list(model.parameters()))
-        print("-----------------------------------------------------------------------------")
+    def loss_visualize(self,loss_tensor):
+        losses = np.array(loss_tensor)
+        print(losses)
+        
+        plt.plot(losses)
+        
+    def validation_test(self,test_dataloader, criterion, model, norm_min, norm_max):
+        test_loss = 0
+        accuracy = 0
+        all_predictions = []
+        for (examples, labels) in test_dataloader:
+        
+            if(str(device) == 'cuda'):
+                examples = examples.to(device)
+                labels = labels.to(device)
+                
+            output = model.forward(examples)
+            
+            un_normed_outputs = un_normalize(output, norm_min,norm_max)
+            all_predictions.append(un_normed_outputs.detach())
+            #print("output --> ", un_normed_outputs)
+            loss = criterion(output, labels).item()
+            test_loss += loss
+            
+            #ps = torch.exp(output)
+            #equality = (labels.data == ps.max(dim=1)[1])
+            #accuracy += equality.type(torch.FloatTensor).mean()
+            
+            #print('output --> ', un_normed_outputs, ' loss --> ', loss)
+            
+        return test_loss, accuracy, all_predictions
+    
+    def un_normalize(self,norm_val,min_val,max_val,typelist=None):
+        if(typelist):
+            for idx,item in enumerate(norm_val):
+                new_val = item * (max_val - min_val) + min_val
+                norm_val[idx] = new_val
+            return norm_val
+        else:
+            return norm_val * (max_val - min_val) + min_val  
 
+    def prediction_visualization(self,minimum_price,maximum_price,close_prices,model_predictions):
+        plt.close()
+            
+        test_values = np.array(un_normalize(norm_val=close_prices,min_val=minimum_price,max_val=maximum_price,typelist=True))
+        print(test_values)
+        #print(np.array(model_predictions.grad))
+        #model_predictions[0].requires_grad = False
+        for idx,item in enumerate(model_predictions):
+            model_predictions[idx] = np.asscalar(item.cpu().numpy())
+        predicted_values = model_predictions
+        
+        print(len(test_values))
+        print(len(predicted_values))
+        
+        plt.plot(np.array(test_values),color='#FFA500')
+        plt.plot(np.array(predicted_values),color='g')
+        plt.show()
+        pass
 
-def table_edit(dataframe):
-    dataframe = dataframe.drop(labels=['1b. open (USD)','2b. high (USD)','3b. low (USD)','4b. close (USD)'],axis=1)
-    table_col_order = ['1a. open (USD)','2a. high (USD)','3a. low (USD)','5. volume','6. market cap (USD)','4a. close (USD)']
-    dataframe = dataframe[table_col_order]
-    return dataframe
 
 def main():
-    raw_price_data = fetch_btc_prices()
-    data_df = parse_alphaV_JSON(raw_data=raw_price_data)
+
+    trainer = Trainer()    
+    # ------------------------------------------ PREPROCESSING ----------------------------------------------
+    raw_price_data = trainer.fetch_latest_BTC_JSON()
+#     raw_price_data = fetch_btc_prices()
+    data_df = trainer.parse_alphaV_JSON(raw_data=raw_price_data)
+    data_df = data_df.iloc[::-1]
+    
+    print(data_df)
+    
     prices = np.array(data_df['4a. close (USD)'].tolist())
+    
+    original_volume = data_df['5. volume'].values
+    min_volume = np.min(data_df['5. volume'].values)
+    max_volume = np.max(data_df['5. volume'].values)
+   
+    data_df_temp = data_df.drop(labels=['1a. open (USD)','1b. open (USD)','2b. high (USD)','3b. low (USD)','4a. close (USD)','4b. close (USD)','6. market cap (USD)'],axis=1) # ,'2a. high (USD)','3a. low (USD)'
+    minmax_2 = preprocessing.MinMaxScaler()
+    data_df_temp = pd.DataFrame(minmax_2.fit_transform(data_df_temp), columns=data_df_temp.columns)
+    
     # -- Normalize the Data --
     min_max_scaler = preprocessing.MinMaxScaler()
     data_df = pd.DataFrame(min_max_scaler.fit_transform(data_df), columns=data_df.columns)
     # print(data_df)
-
-    data_df = table_edit(data_df)
+    data_df = trainer.table_edit(data_df)
     y_train = np.array(data_df['4a. close (USD)'].tolist())
     data_df = data_df.drop(labels=['4a. close (USD)'],axis=1)
     
-    model = MLP()
+    data_df = data_df.drop(labels=['1a. open (USD)','6. market cap (USD)'],axis=1) # ,'2a. high (USD)','3a. low (USD)'
+    print('---new---')
+    print(data_df)
 
-    train(model, data_df.values,y_train,prices)
+#     vmas = VMA_calculation(prices=data_df['5. volume'].values)
+    
+#     #print(vmas)
+#     #print(un_normalize(norm_val=vmas,min_val=min_volume,max_val=max_volume,typelist=True))
+    
+#     x_train,y_train,x_test,y_test,train_dataloader,test_dataloader = vol_dataset_prep(vmas,data_df['5. volume'].values,original_volume)
+#     vol_predictor = NumberRegression_MLP()
+#     model,loss_func,_,_ = vol_train(vol_predictor, train_dataloader)
+#     test_loss,accuracy,predictions = vol_test(vol_predictor,loss_func,test_dataloader,min_volume,max_volume)
+#     vol_prediction_visualization(predictions,y_test,min_volume,max_volume)
+#     #print(data_df)
+#     test = data_df['5. volume'].values
+#     print(test)
+#     volume_visualization(test)
 
-    pass
+    model = TimeCNN()#MLP(3)
+    losses, test_data_loader, loss_func, model, min_price, max_price, test_prices = trainer.train(model, data_df.values,y_train,prices)
+    #trainer.loss_visualize(losses)
+    #_, _, all_unnormed_outputs = trainer.validation_test(test_dataloader=test_data_loader,criterion=loss_func, model=model, norm_min=min_price, norm_max=max_price)
+    
+    #trainer.prediction_visualization(minimum_price=min_price,maximum_price=max_price,close_prices=test_prices,model_predictions=all_unnormed_outputs)
+    return minmax_2,model,min_price,max_price
 
+min_max_scaler,price_model,min_price,max_price = main()
 if __name__ == '__main__':
     main()
