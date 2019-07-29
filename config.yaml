@@ -1,8 +1,9 @@
-### MLP ###
-mlp_batch_size : 1
-mlp_epochs : 50
-mlp_learning_rate : 0.001
+# Model Hyperparameters
+learning_rate : 0.001
+batch_size : 1
+epochs : 50
+dropout_rate : 0
 
-### CNN ###
-
-### RNN ###
+### LSTM ###
+lstm_hidden_size : 1
+lstm_num_layers : 1
