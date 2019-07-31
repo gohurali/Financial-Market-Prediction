@@ -203,9 +203,23 @@ class Trainer(object):
 
     def train(self,model, x_data,y_data, original_prices,epochs):
         """Price prediction model training loop function. This method
-        is generalized for the purposes of allowing any model to be used
+        is generalized for the purposes of allowing any model to be used.
 
-        Arguements:"""
+        Arguments:
+            * model - torch subclassed model
+            * x_data - input tensor dataset
+            * y_data - targer tensor dataset
+            * original_prices - original target dataset for re-scaling
+            * epochs - number of epochs for training
+        Returns:
+            * losses
+            * test_data_loader
+            * loss_func
+            * model 
+            * min_price
+            * max_price
+            * y_test
+        """
         prices = torch.tensor(original_prices)
         max_price = torch.max(prices)
         min_price = torch.min(prices)
@@ -253,13 +267,7 @@ class Trainer(object):
                     examples = examples.to(device)
                     labels = labels.to(device)
 
-                #print(examples , " ----- " , labels)
-
                 optimizer.zero_grad()
-
-                # -- Input to CUDA --
-                #examples = examples.to(device)
-                #labels = labels.to(device)
 
                 y_predictions = model(examples.float())
                 loss = loss_func(y_predictions.float(),labels.view(1,1).float())
@@ -518,7 +526,11 @@ def main():
                                                                                                   epochs=config['epochs']
                                                                                                   )
     #trainer.loss_visualize(losses)
-    _, _, all_unnormed_outputs = trainer.validation_test(test_dataloader=test_data_loader,criterion=loss_func, model=model, norm_min=min_price, norm_max=max_price)
+    _, _, all_unnormed_outputs = trainer.validation_test(test_dataloader=test_data_loader,
+                                                         criterion=loss_func, 
+                                                         model=model, 
+                                                         norm_min=min_price, 
+                                                         norm_max=max_price)
     
     #trainer.prediction_visualization(minimum_price=min_price,maximum_price=max_price,close_prices=test_prices,model_predictions=all_unnormed_outputs)
     return minmax_2,model,min_price,max_price
