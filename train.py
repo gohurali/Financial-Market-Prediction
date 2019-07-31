@@ -1,23 +1,25 @@
-import requests
-import os
-import yaml
-import json
-import numpy as np
-import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data
 from torch.utils.tensorboard import SummaryWriter
+import numpy as np
 import sklearn
 from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import urllib3
+import requests
+import os
+import yaml
+import argparse
+import json
+import pandas as pd
 import cryptocompare
 from datetime import datetime
 
+# Device detection for training acceleration
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #print("Device state:\t", device)
 #print("Device index:\t",torch.cuda.current_device())
@@ -538,3 +540,4 @@ def main():
 
 if __name__ == '__main__':
     min_max_scaler,price_model,min_price,max_price = main()
+    torch.save(price_model,'models/test.pt')
