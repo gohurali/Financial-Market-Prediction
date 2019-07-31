@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data
-#from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 import sklearn
 from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
@@ -262,7 +262,7 @@ class Trainer(object):
                 #labels = labels.to(device)
 
                 y_predictions = model(examples.float())
-                loss = loss_func(y_predictions.float(),labels.float())
+                loss = loss_func(y_predictions.float(),labels.view(1,1).float())
 
                 total_loss += loss.data
 
@@ -312,7 +312,7 @@ class Trainer(object):
             un_normed_outputs = self.un_normalize(output, norm_min,norm_max)
             all_predictions.append(un_normed_outputs.detach())
             #print("output --> ", un_normed_outputs)
-            loss = criterion(output, labels).item()
+            loss = criterion(output, labels.view(1,1)).item()
             test_loss += loss
 
             #ps = torch.exp(output)
@@ -484,7 +484,7 @@ def main():
     # -- Preprocessing -- #
     raw_price_data = trainer.fetch_latest_BTC_JSON()
     data_df = trainer.parse_alphaV_JSON(raw_data=raw_price_data)
-    data_df = data_df.iloc[::-1] # Flip data
+    #data_df = data_df.iloc[::-1] # Flip data
 
     # Seperating the y-data
     prices = np.array(data_df['4a. close (USD)'].tolist())
@@ -502,8 +502,6 @@ def main():
     data_df = data_df.drop(labels=['4a. close (USD)'],axis=1)
     
     data_df = data_df.drop(labels=['1a. open (USD)','6. market cap (USD)'],axis=1)
-    print('---new---')
-    print(data_df)
  
     model = TimeRNN(bat_size=config['batch_size'],
                     in_features=3,
@@ -519,10 +517,10 @@ def main():
                                                                                                   original_prices=prices,
                                                                                                   epochs=config['epochs']
                                                                                                   )
-    trainer.loss_visualize(losses)
+    #trainer.loss_visualize(losses)
     _, _, all_unnormed_outputs = trainer.validation_test(test_dataloader=test_data_loader,criterion=loss_func, model=model, norm_min=min_price, norm_max=max_price)
     
-    trainer.prediction_visualization(minimum_price=min_price,maximum_price=max_price,close_prices=test_prices,model_predictions=all_unnormed_outputs)
+    #trainer.prediction_visualization(minimum_price=min_price,maximum_price=max_price,close_prices=test_prices,model_predictions=all_unnormed_outputs)
     return minmax_2,model,min_price,max_price
 
 

@@ -1,7 +1,7 @@
 # Model Hyperparameters
 learning_rate : 0.001
 batch_size : 1
-epochs : 50
+epochs : 5
 dropout_rate : 0
 
 ### LSTM ###
