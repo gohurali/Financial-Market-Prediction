@@ -3,7 +3,7 @@ model_save_loc : models/test.pt
 # Model Hyperparameters
 learning_rate : 0.001
 batch_size : 1
-epochs : 1
+epochs : 20
 dropout_rate : 0
 
 ### LSTM ###

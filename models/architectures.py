@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 """
 Basic multilayer perceptron subclass 
 of three layers in PyTorch
