@@ -15,20 +15,23 @@ import os
 import yaml
 import argparse
 import json
+import pickle
 import pandas as pd
 import cryptocompare
 from datetime import datetime
 
-# Device detection for training acceleration
+parser = argparse.ArgumentParser()
+serve = parser.add_argument('-serve','--serve', dest='serve', action='store_true')
+args = parser.parse_args()
+
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-#print("Device state:\t", device)
-#print("Device index:\t",torch.cuda.current_device())
-#print("Current device:\t", torch.cuda.get_device_name(device))
-"""
-Basic multilayer perceptron subclass 
-of three layers in PyTorch
-"""
+
 class MLP(nn.Module):
+    """
+    Basic multilayer perceptron subclass 
+    of three layers in PyTorch
+    """
     def __init__(self,num_features):
         super(MLP,self).__init__()
         self.fc1 = nn.Linear(in_features=num_features,out_features=32)
@@ -57,11 +60,7 @@ class NumberRegression_MLP(nn.Module):
 """
 Recurrent Neural Networks (RNN)
 RNNs are an excellent method to model sequential data
-and time series data. This is perfect for stocks and
-crytocurrency price prediction.
-
-https://stackoverflow.com/questions/45022734/understanding-a-simple-lstm-pytorch
-https://www.jessicayung.com/lstms-for-time-series-in-pytorch/
+and time series data.
 """
 class TestRNN(nn.Module):
     def __init__(self,bat_size,in_features,h_size,layer_amnt):
@@ -485,8 +484,6 @@ class Trainer(object):
         plt.plot(np.array(actual),color='g')
         plt.plot(np.array(predictions),color='#FFA500')
 
-
-
 def main():
     
     trainer = Trainer()
@@ -539,5 +536,8 @@ def main():
 
 
 if __name__ == '__main__':
+    
     min_max_scaler,price_model,min_price,max_price = main()
-    torch.save(price_model,'models/test.pt')
+    if(args.serve == True):
+        print('-- Saving Torch Model --')
+        torch.save(price_model,'models/test.pt')
