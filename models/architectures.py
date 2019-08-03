@@ -119,7 +119,7 @@ class TimeRNN(nn.Module):
                              hidden_size=self.h_size,
                              num_layers=self.layer_amnt,
                              bias=True,
-                             batch_first=True,
+                             batch_first=False,
                              dropout=0,
                              bidirectional=False)
         self.fc1 = nn.Linear(in_features=1,out_features=1)
