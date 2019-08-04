@@ -1,0 +1,3 @@
+[submodule "FinancialPrediction_Paper"]
+	path = FinancialPrediction_Paper
+	url = https://github.com/gohurali/FinancialPrediction_Paper.git
