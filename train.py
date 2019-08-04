@@ -32,9 +32,11 @@ args = parser.parse_args()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 class TimeRNN(nn.Module):
     def __init__(self,bat_size,in_features,h_size,layer_amnt):
         super(TimeRNN,self).__init__()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         self.batch_sz = bat_size
         self.in_features = in_features
@@ -65,11 +67,12 @@ class TimeRNN(nn.Module):
     def forward(self,x):
         x = x.unsqueeze(0)
         hidden_init = self.init_hidden()
-        h0 = hidden_init[0].to(device)
-        c0 = hidden_init[1].to(device)
+        h0 = hidden_init[0].to(self.device)
+        c0 = hidden_init[1].to(self.device)
         x,hidden = self.lstm1( x,(h0,c0))
         x = F.leaky_relu(self.fc1(x[-1].view(self.batch_sz,-1)))
         return x
+
 
 class TickerData(torch.utils.data.Dataset):
     def __init__(self, table):
@@ -449,8 +452,8 @@ if __name__ == '__main__':
     if(args.save == True):
         print('-- Saving Torch Model --')
         #print(price_model.state_dict())
-        #torch.save(price_model.state_dict(),'models/price_predictor.pt')
-        torch.save(price_model,'models/price_predictor.pt')
+        torch.save(price_model.state_dict(),'models/price_predictor.pt')
+        #torch.save(price_model,'models/price_predictor.pt')
     elif(args.serve == True):
         print('-- Exporting to ONNX --')
         dummy_input = torch.tensor([[1, 2, 3]]).float()
