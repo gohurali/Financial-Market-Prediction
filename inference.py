@@ -33,8 +33,8 @@ class Inferencer(object):
     
     def open_model(self):
         model = TimeRNN(bat_size=1,in_features=3,h_size=1,layer_amnt=1)
-        #model.load_state_dict(torch.load(config['model_save_loc']))
-        model = torch.load(config['model_save_loc'])
+        model.load_state_dict(torch.load(config['model_save_loc']))
+        #model = torch.load(config['model_save_loc'])
         model.eval()
         return model
 
@@ -96,7 +96,7 @@ def main():
     minimum_price = np.min(prices)
     maximum_price = np.max(prices)
 
-    output = inf.inference(value=[ [8700,11080,vol[-1]]],
+    output = inf.inference(value=[ [11000,11880,vol[-1]]],
                        normalize_method=minmax_2,
                        model=inf.model,
                        minimum_price=minimum_price,

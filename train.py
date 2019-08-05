@@ -24,10 +24,27 @@ from datetime import datetime
 #from models.architectures import TimeCNN
 #from models.architectures import TimeRNN
 
-parser = argparse.ArgumentParser()
-save = parser.add_argument('--save-model', dest='save', action='store_true')
-serve = parser.add_argument('--serve', dest='serve', action='store_true')
-output_dir = parser.add_argument('--output-dir', type=str, default='outputs')
+parser = argparse.ArgumentParser(description='Training Parameter Setter')
+parser.add_argument('--save-model',
+                    dest='save',
+                    action='store_true',
+                    help='saves the model as a .pt file')
+parser.add_argument('--state-dict',
+                    dest='state_dict_pt',
+                    action='store_true',
+                    help='saves model as a pytorch state dictionary .pt file')
+parser.add_argument('--full-model',
+                    dest='full_model_pt',
+                    action='store_true',
+                    help='saves the full model as a .pt file')
+parser.add_argument('--onnx', 
+                    dest='onnx', 
+                    action='store_true',
+                    help='saves the model as a .onnx file')
+parser.add_argument('--output-dir', 
+                    type=str, 
+                    default='outputs',
+                    help='saves model in a given location')
 args = parser.parse_args()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -450,12 +467,14 @@ if __name__ == '__main__':
     
     min_max_scaler,price_model,min_price,max_price = main()
     if(args.save == True):
-        print('-- Saving Torch Model --')
-        #print(price_model.state_dict())
-        torch.save(price_model.state_dict(),'models/price_predictor.pt')
-        #torch.save(price_model,'models/price_predictor.pt')
-    elif(args.serve == True):
-        print('-- Exporting to ONNX --')
-        dummy_input = torch.tensor([[1, 2, 3]]).float()
-        model_path = os.path.join(args.output_dir, 'price_predictor.onnx')
-        torch.onnx.export(price_model, dummy_input, model_path)
+        if(args.state_dict_pt == True):
+            print('-- Saving Torch Model State Dictionary --')
+            torch.save(price_model.state_dict(),'models/price_predictor.pt')
+        elif(args.full_model_pt == True):
+            print('-- Saving Torch Model --')
+            torch.save(price_model,'models/price_predictor.pt')
+        elif(args.onnx == True):
+            print('-- Exporting to ONNX --')
+            dummy_input = torch.tensor([[1, 2, 3]]).float()
+            model_path = os.path.join(args.output_dir, 'price_predictor.onnx')
+            torch.onnx.export(price_model, dummy_input, model_path)
