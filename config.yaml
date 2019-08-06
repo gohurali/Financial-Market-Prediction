@@ -9,3 +9,8 @@ dropout_rate : 0
 ### LSTM ###
 lstm_hidden_size : 1
 lstm_num_layers : 1
+
+
+# Service URI
+scoring_uri : http://f8878ff6-dd7c-475c-b4a0-0735e0524948.eastus2.azurecontainer.io/score
+scoring_uri2 : http://0a719a6d-cc83-45f0-81c9-f4aa260122aa.eastus2.azurecontainer.io/score
