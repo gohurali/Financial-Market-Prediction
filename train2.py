@@ -109,12 +109,9 @@ config = get_config()
 
 class Trainer(object):
     def __init__(self,DataPrepper=None):
-        
         self.x_data,self.y_data = DataPrepper.get_data()
-
         self.x_train,self.x_test,self.y_train,self.y_test = self.data_split(x_data=self.x_data,
                                                                             y_data=self.y_data)
-
         self.train_dataloader, self.test_dataloader = self.create_dataloaders(self.x_data,self.y_data)
     
     def create_dataloaders(self,x_data,y_data):
@@ -300,17 +297,24 @@ def main():
                                                          norm_max=max_price)
     
     #trainer.prediction_visualization(minimum_price=min_price,maximum_price=max_price,close_prices=y_test,model_predictions=all_unnormed_outputs)
-    return prepper.minmax_2,model,min_price,max_price
+    
+    return prepper.minmax_2,model,min_price,max_price,trainer.y_test,all_unnormed_outputs
 
 
 if __name__ == '__main__':
     
-    min_max_scaler,price_model,min_price,max_price = main()
+    min_max_scaler,price_model,min_price,max_price,norm_test_vals,predictions = main()
+
+    # -- Save Training Session Data (Test & Predictions) --
+    for idx,val in enumerate(predictions):
+        predictions[idx] = val.numpy().item()
+    predictions = np.array(predictions)
+    np.save('utils/test_data.npy',norm_test_vals)
+    np.save('utils/predictions.npy',predictions)
     model_name = get_model_name()
     if(args.save == True):
         if(args.state_dict_pt == True):
             print('-- Saving Torch Model State Dictionary --')
-            
             torch.save(price_model.state_dict(),'models/'+model_name+".pt")
         elif(args.full_model_pt == True):
             print('-- Saving Torch Model --')

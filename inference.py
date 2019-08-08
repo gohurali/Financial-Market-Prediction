@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg')
 import requests
 import os
 import yaml
@@ -76,7 +78,59 @@ class Inferencer(object):
         df = df.transpose()
         return df
 
+    def prediction_visualize(self,save=False,window=0,test_vals=[],pred_values=[],inference_values=[]):
+        if(window == 0):
+            plt.close()
+            # --- visualize ---
+            f,arr = plt.subplots()
+            arr.plot(test_vals,'#FFA500')
+            arr.plot(pred_values,'g')
+
+            x_val = np.arange(len(pred_values),len(pred_values)+len(inference_values),1)
+            # -- Connect --
+            x = [x_val[0] - 1, x_val[0]]
+            y = [pred_values[-1],inference_values[0]]
+            arr.plot(x,y,'r')
+            
+            arr.plot(x_val,inference_values,'r')
+            arr.grid()
+            
+            if(save):
+                plt.savefig(fname='images/prediction.png')
+        else:
+            plt.close()
+            test_vals = test_vals[-window:]
+            pred_vals = pred_values[-window:]
+
+            f,arr = plt.subplots(figsize=(10,10))
+            #plt.figure(figsize=(10,10))
+            arr.plot(test_vals,'#FFA500')
+            arr.plot(pred_vals,'g')
+
+            x_val = np.arange(len(pred_vals),len(pred_vals)+len(inference_values),1)
+            # -- Connect --
+            x = [x_val[0] - 1, x_val[0]]
+            y = [pred_values[-1],inference_values[0]]
+            arr.plot(x,y,'r--')
+
+            arr.plot(x_val,inference_values,'r--')
+            arr.grid()
+
+            start = min( np.min(test_vals),np.min(pred_vals),np.min(inference_values))
+            end = max(( np.max(test_vals),np.max(pred_vals),np.max(inference_values)))
+        
+            plt.yticks(np.arange(start-100,end+100,100))
+            arr.yaxis.tick_right()
+            arr.set_title(str(window) + ' day BTCUSD Price Prediction')
+            arr.legend(['Actual Value','Predicted Value','Inference'],prop={'size': 15})
+            if(save):
+                plt.savefig(fname='images/prediction.png')
+
+    def get_previous_data(self):
+        pass
+
 def main():
+
     inf = Inferencer()
 
     histPriceDay = cryptocompare.get_historical_price_day('BTC', curr='USD')
@@ -103,6 +157,18 @@ def main():
                        maximum_price=maximum_price
                       )
     print('BTC prediction: ', output)
+
+    # -- Load previous training session data --
+    test_data = np.load('utils/test_data.npy')
+    train_preds = np.load('utils/predictions.npy')
+    #print('test_data= ',test_data)
+    #print('train_preds= ', train_preds)	
+    test_data = inf.un_normalize(norm_val=test_data,min_val=minimum_price,max_val=maximum_price,typelist=True)
+    inf.prediction_visualize(save=True,
+                             window=30,
+                             test_vals=test_data,
+                             pred_values=train_preds,
+                             inference_values=output)
     
 if __name__ == '__main__':
     main()
