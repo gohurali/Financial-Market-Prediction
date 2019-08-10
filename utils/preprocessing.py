@@ -32,6 +32,11 @@ class MinMaxScaler:
                 column[idx] = self.normalize(val=value,min_val=feat.feat_min,max_val=feat.feat_max)
             #print()
         return self.data
+    def transform(self,val):
+        for idx,(value,feature_col) in enumerate(zip(val.T,self.feature_col)):
+            transform_val = self.normalize(val=value,min_val=feature_col.feat_min,max_val=feature_col.feat_max)
+            val.T[idx] = transform_val
+        return val
     def inverse_transform(self,val):
         typelist=True
         val = np.array(val)
@@ -111,13 +116,3 @@ def train_test_split(x_data,y_data,test_size):
         return x_train,x_test,y_train,y_test
     else:
         raise Exception("x-data and y-data are of different sizes!")
-
-
-# def main():
-#     dp = DataPrepper()
-#     #print(dp.dataframe)
-
-#     pass
-
-# if __name__ == '__main__':
-#     main()

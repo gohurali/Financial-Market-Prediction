@@ -11,16 +11,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data
 from torch.utils.tensorboard import SummaryWriter
-import sklearn
-from sklearn import preprocessing
-from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import urllib3
 import cryptocompare
 from datetime import datetime
 from models.architectures import TimeRNN
-
+from utils.preprocessing import MinMaxScaler
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -144,8 +141,8 @@ def main():
     df = inf.parse_alphaV_JSON(raw_data=raw_data)
     prices = np.array(df['4a. close (USD)'].tolist())
     data_df_temp = df.drop(labels=['1a. open (USD)','1b. open (USD)','2b. high (USD)','3b. low (USD)','4a. close (USD)','4b. close (USD)','6. market cap (USD)'],axis=1) # ,'2a. high (USD)','3a. low (USD)'
-    minmax_2 = preprocessing.MinMaxScaler()
-    data_df_temp = pd.DataFrame(minmax_2.fit_transform(data_df_temp), columns=data_df_temp.columns)
+    minmax_2 = MinMaxScaler(data=data_df_temp.values)
+    data_df_temp = pd.DataFrame(minmax_2.fit_transform(), columns=data_df_temp.columns)
 
     minimum_price = np.min(prices)
     maximum_price = np.max(prices)

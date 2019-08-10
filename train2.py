@@ -4,9 +4,6 @@ import torch.nn.functional as F
 import torch.utils.data
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
-#import sklearn
-#from sklearn import preprocessing
-#from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import urllib3
