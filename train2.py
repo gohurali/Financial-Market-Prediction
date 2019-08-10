@@ -4,9 +4,9 @@ import torch.nn.functional as F
 import torch.utils.data
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
-import sklearn
-from sklearn import preprocessing
-from sklearn.model_selection import train_test_split
+#import sklearn
+#from sklearn import preprocessing
+#from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import urllib3
@@ -21,6 +21,7 @@ import cryptocompare
 import time
 from datetime import datetime
 from utils.preprocessing import DataPrepper
+from utils.preprocessing import train_test_split
 #from models.architectures import MLP
 #from models.architectures import TestRNN
 #from models.architectures import TimeCNN
@@ -134,7 +135,7 @@ class Trainer(object):
         return train_data_loader, test_data_loader
 
     def data_split(self,x_data,y_data):
-        x_train, x_test, y_train, y_test = train_test_split(x_data,y_data,test_size=0.2,random_state=100,shuffle=False)
+        x_train, x_test, y_train, y_test = train_test_split(x_data,y_data,test_size=0.2)#train_test_split(x_data,y_data,test_size=0.2,random_state=100,shuffle=False)
         return x_train, x_test, y_train, y_test
 
     def train(self,model, train_data, original_prices,epochs):
