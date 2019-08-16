@@ -25,6 +25,10 @@ from utils.preprocessing import train_test_split
 #from models.architectures import TimeRNN
 
 parser = argparse.ArgumentParser(description='Training Parameter Setter')
+parser.add_argument('--tensorboard',
+                    dest='tensorboard',
+                    action='store_true',
+                    help='saves tensorboard logs for debug and learning visualization')
 parser.add_argument('--save-model',
                     dest='save',
                     action='store_true',
@@ -46,9 +50,8 @@ parser.add_argument('--output-dir',
                     default='outputs',
                     help='saves model in a given location')
 args = parser.parse_args()
-
+writer = None
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
 class TimeRNN(nn.Module):
     def __init__(self,bat_size,in_features,h_size,layer_amnt):
@@ -104,6 +107,9 @@ def get_config(file_loc='config.yaml'):
     return yaml.safe_load(open(file_loc))
 
 config = get_config()
+
+if(args.tensorboard):
+    writer = SummaryWriter(log_dir=config['tensorboard_log_loc'])
 
 class Trainer(object):
     def __init__(self,DataPrepper=None):
@@ -182,6 +188,9 @@ class Trainer(object):
 
                 y_predictions = model(examples.float())
                 loss = loss_func(y_predictions.float(),labels.view(1,1).float())
+                
+                if(args.tensorboard):
+                    writer.add_scalar(tag='loss',scalar_value=loss.data,global_step=i)
 
                 total_loss += loss.data
 

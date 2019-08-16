@@ -23,6 +23,24 @@ class MLP(nn.Module):
         x = F.leaky_relu(self.fc3(x))
         return x
 
+class DeepMLP(nn.Module):
+    def __init__(self,num_features):
+        super(DeepMLP,self).__init__()
+        self.fc1 = nn.Linear(in_features=num_features,out_features=32)
+        self.fc2 = nn.Linear(in_features=32,out_features=128)
+        self.fc3 = nn.Linear(in_features=128,out_features=256)
+        self.fc4 = nn.Linear(in_features=256,out_features=512)
+        self.fc5 = nn.Linear(in_features=512,out_features=1024)
+        self.fc6 = nn.Linear(in_features=1024,out_features=1)
+    def forward(self,x):
+        x = F.leaky_relu(self.fc1(x))
+        x = F.leaky_relu(self.fc2(x))
+        x = F.leaky_relu(self.fc3(x))
+        x = F.leaky_relu(self.fc4(x))
+        x = F.leaky_relu(self.fc5(x))
+        x = F.leaky_relu(self.fc6(x))
+        return x
+    
 class NumberRegression_MLP(nn.Module):
     def __init__(self):
         super(NumberRegression_MLP,self).__init__()

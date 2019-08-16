@@ -1,9 +1,10 @@
 model_save_loc : models/price_predictor.pt
+tensorboard_log_loc : models/tensorboard_logs/
 
 # Model Hyperparameters
 learning_rate : 0.001
 batch_size : 1
-epochs : 2
+epochs : 5
 dropout_rate : 0
 
 ### LSTM ###
