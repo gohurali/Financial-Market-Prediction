@@ -1,8 +1,8 @@
-# Stock-Data-Analysis
+# Financial Prediction with Time Series Dependent Neural Networks
 
 In this study, we look at cryptocurrency and stock price prediction by utilizing machine learning methods. We look at primary types of neural networks such as multi-layer perceptrons, temporal convolutional neural networks, and long-term-short-term memory recurrent neural networks.   
 
-## Getting Started with the Machine Learning
+## Getting Started with the ML Backend
 
 ### Dependencies
 This project requires you to install the following packages:
@@ -48,6 +48,7 @@ $ python3 inference.py --trnn --low 10400 --high 10500 --volume 45000
 ## Getting Started with the Application
 This project requires you to install the following packages:
 * `torch`
+    * Depending on the version of python and your PC please install via instructions posted on https://pytorch.org/
 * `numpy`
 * `pandas`
 * `matplotlib`
@@ -91,6 +92,8 @@ application to be re-executed for the changes to take effect.
 ![App](images/2019_8_23_application_desktop.gif "AppDemo")
 
 Here's a demo of the application, for the purposes of the demo, we demo a lightly trained model.
+In the near future we will be completing the APK for Android so the application can be used via 
+AndroidOS.
 
 
 ### Helpful Links
