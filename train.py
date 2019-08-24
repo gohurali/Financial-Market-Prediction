@@ -4,9 +4,6 @@ import torch.nn.functional as F
 import torch.utils.data
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
-import sklearn
-from sklearn import preprocessing
-from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import urllib3
@@ -18,13 +15,24 @@ import json
 import pickle
 import pandas as pd
 import cryptocompare
+import time
 from datetime import datetime
+from utils.preprocessing import DataPrepper
+from utils.preprocessing import train_test_split
 #from models.architectures import MLP
 #from models.architectures import TestRNN
-#from models.architectures import TimeCNN
+from models.architectures import TimeCNN
 #from models.architectures import TimeRNN
 
 parser = argparse.ArgumentParser(description='Training Parameter Setter')
+parser.add_argument('--tensorboard',
+                    dest='tensorboard',
+                    action='store_true',
+                    help='saves tensorboard logs for debug and learning visualization')
+parser.add_argument('--tcnn',
+                    dest='tcnn',
+                    action='store_true',
+                    help='trains a temporal CNN model')
 parser.add_argument('--save-model',
                     dest='save',
                     action='store_true',
@@ -42,13 +50,12 @@ parser.add_argument('--onnx',
                     action='store_true',
                     help='saves the model as a .onnx file')
 parser.add_argument('--output-dir', 
-                    type=str, 
+                    type=str,
                     default='outputs',
                     help='saves model in a given location')
 args = parser.parse_args()
-
+writer = None
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
 class TimeRNN(nn.Module):
     def __init__(self,bat_size,in_features,h_size,layer_amnt):
@@ -105,32 +112,40 @@ def get_config(file_loc='config.yaml'):
 
 config = get_config()
 
-class Trainer(object):
-    def __init__(self):
-        pass
-    def fetch_latest_BTC_JSON(self):
-        """Fetch the latest JSON data"""
-        API_LINK = 'https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY&symbol=BTC&market=USD&apikey=SAITMI5ZUMGEKGKY'
-        page = requests.get(API_LINK).json()
-        return page
-    def fetch_btc_prices(self):
-        with open("/content/gdrive/My Drive/College/Undergraduate Research/StockData/BTC_data.json") as f:
-            return json.load(f)  
+if(args.tensorboard):
+    writer = SummaryWriter(log_dir=config['tensorboard_log_loc'])
 
-    def parse_alphaV_JSON(self,raw_data):
-        # Remove meta data for now
-        raw_data.pop('Meta Data',None)
-        # Remove key name
-        df = pd.DataFrame.from_dict(raw_data['Time Series (Digital Currency Daily)'],dtype=float)
-        # Flip dates as columns into rows
-        df = df.transpose()
-        return df
+class Trainer(object):
+    def __init__(self,DataPrepper=None):
+        self.x_data,self.y_data = DataPrepper.get_data()
+        self.x_train,self.x_test,self.y_train,self.y_test = self.data_split(x_data=self.x_data,
+                                                                            y_data=self.y_data)
+        self.train_dataloader, self.test_dataloader = self.create_dataloaders(self.x_data,self.y_data)
     
-    def data_split(self,x_train,y_train):
-        x_train, x_test, y_train, y_test = train_test_split(x_train,y_train,test_size=0.2,random_state=100,shuffle=False)
+    def create_dataloaders(self,x_data,y_data):
+        x_train, x_test, y_train, y_test = self.data_split(x_data,y_data)
+        train_tensorDataset = torch.utils.data.TensorDataset(torch.from_numpy(x_train),torch.from_numpy(y_train))
+        train_data_loader = torch.utils.data.DataLoader(
+            dataset=train_tensorDataset,
+            batch_size=config['batch_size'],
+            shuffle=False,
+            num_workers=0
+        )
+
+        test_tensorDataset = torch.utils.data.TensorDataset(torch.Tensor(x_test),torch.Tensor(y_test))
+        test_data_loader = torch.utils.data.DataLoader(
+            dataset=test_tensorDataset,
+            batch_size=config['batch_size'],
+            shuffle=False,
+            num_workers=0
+        )
+        return train_data_loader, test_data_loader
+
+    def data_split(self,x_data,y_data):
+        x_train, x_test, y_train, y_test = train_test_split(x_data,y_data,test_size=0.2)#train_test_split(x_data,y_data,test_size=0.2,random_state=100,shuffle=False)
         return x_train, x_test, y_train, y_test
 
-    def train(self,model, x_data,y_data, original_prices,epochs):
+    def train(self,model, train_data, original_prices,epochs):
         """Price prediction model training loop function. This method
         is generalized for the purposes of allowing any model to be used.
 
@@ -153,24 +168,6 @@ class Trainer(object):
         max_price = torch.max(prices)
         min_price = torch.min(prices)
 
-        print('----Dataset Prep----')
-        x_train, x_test, y_train, y_test = self.data_split(x_data,y_data)
-        train_tensorDataset = torch.utils.data.TensorDataset(torch.from_numpy(x_train),torch.from_numpy(y_train))
-        train_data_loader = torch.utils.data.DataLoader(
-            dataset=train_tensorDataset,
-            batch_size=config['batch_size'],
-            shuffle=False,
-            num_workers=0
-        )
-
-        test_tensorDataset = torch.utils.data.TensorDataset(torch.Tensor(x_test),torch.Tensor(y_test))
-        test_data_loader = torch.utils.data.DataLoader(
-            dataset=test_tensorDataset,
-            batch_size=config['batch_size'],
-            shuffle=False,
-            num_workers=0
-        )
-
         print('-- Model Architecture --')
         print(model)
 
@@ -180,17 +177,12 @@ class Trainer(object):
             #model = model.cuda()
             model.to(device)
 
-        # -- Since we are predicting prices --> mean squared error is our loss function
         loss_func = torch.nn.MSELoss()
-
-        # -- Optimizer --> Adam generally works best
-        # TODO: choose a better learning rate later
         optimizer = torch.optim.Adam(model.parameters(), lr=config['learning_rate'])
-
         total_loss = 0
         losses = []
         for epoch in (range(epochs)):
-            for i, (examples,labels) in tqdm(enumerate(train_data_loader)):
+            for i, (examples,labels) in tqdm(enumerate(train_data)):
 
                 if( str(device) == 'cuda'):
                     examples = examples.to(device)
@@ -200,6 +192,9 @@ class Trainer(object):
 
                 y_predictions = model(examples.float())
                 loss = loss_func(y_predictions.float(),labels.view(1,1).float())
+                
+                if(args.tensorboard):
+                    writer.add_scalar(tag='loss',scalar_value=loss.data,global_step=i)
 
                 total_loss += loss.data
 
@@ -219,14 +214,7 @@ class Trainer(object):
             #print(list(model.parameters()))
             print("-----------------------------------------------------------------------------")
             losses.append(loss.data)
-        return losses, test_data_loader, loss_func, model, min_price, max_price, y_test
-
-
-    def table_edit(self,dataframe):
-        dataframe = dataframe.drop(labels=['1b. open (USD)','2b. high (USD)','3b. low (USD)','4b. close (USD)'],axis=1)
-        table_col_order = ['1a. open (USD)','2a. high (USD)','3a. low (USD)','5. volume','6. market cap (USD)','4a. close (USD)']
-        dataframe = dataframe[table_col_order]
-        return dataframe
+        return losses, loss_func, model, min_price, max_price
 
     def loss_visualize(self,loss_tensor):
         losses = np.array(loss_tensor)
@@ -248,15 +236,8 @@ class Trainer(object):
 
             un_normed_outputs = self.un_normalize(output, norm_min,norm_max)
             all_predictions.append(un_normed_outputs.detach())
-            #print("output --> ", un_normed_outputs)
             loss = criterion(output, labels.view(1,1)).item()
             test_loss += loss
-
-            #ps = torch.exp(output)
-            #equality = (labels.data == ps.max(dim=1)[1])
-            #accuracy += equality.type(torch.FloatTensor).mean()
-
-            #print('output --> ', un_normed_outputs, ' loss --> ', loss)
 
         return test_loss, accuracy, all_predictions
 
@@ -292,189 +273,69 @@ class Trainer(object):
         plt.show()
         pass
 
-    def volume_visualization(self,volume):
-        vol = np.array(volume)
-        plt.plot(vol)
-        pass
-
-    def VMA_calculation(self,prices=[]):
-        prices = np.array(prices)
-
-        n_prices = []
-        for idx, p in enumerate(prices):
-            if(idx + 1 == len(prices)):
-                break
-            p1 = prices[idx]
-            p2 = prices[idx+1]
-            arr = np.array([p1,p2])#,p3,p4,p5,p6,p7,p8,p9,p10,p11])
-            n_prices.append(arr)
-
-        vmas = []
-        for arr in n_prices:
-            sum_vol = arr.sum()
-            vmas.append(sum_vol/2)
-
-        first_ten = vmas[:10]
-        average_num = np.average(first_ten)
-        vmas = np.insert(vmas,0,average_num)
-
-        #plt.figure(figsize=(20,10))
-        #plt.plot(np.array(prices))
-        #plt.plot(np.array(vmas))
-        return vmas
-
-
-    def vol_dataset_prep(self,vma,volume,original_volume):
-        """VMA - x_train -- volume -- y_train"""
-        print(len(vma))
-        print(len(volume))
-        print(len(original_volume))
-
-    #     vma = torch.tensor(vma)
-    #     volume = torch.tensor(volume)
-
-
-        #########################
-        x_train,x_test,y_train,y_test = data_split(volume,volume)
-
-        #######################
-
-        #x_train,x_test,y_train,y_test = data_split(vma,volume)
-
-        train_data = torch.utils.data.TensorDataset(torch.from_numpy(x_train),torch.from_numpy(y_train))
-        test_data = torch.utils.data.TensorDataset(torch.from_numpy(x_test),torch.from_numpy(y_test))
-        train_dataloader = torch.utils.data.DataLoader(
-            dataset=train_data,
-            batch_size=1,
-            shuffle=False,
-            num_workers=0
-        )
-        test_dataloader = torch.utils.data.DataLoader(
-            dataset=test_data,
-            batch_size=1,
-            shuffle=False,
-            num_workers=0
-        )
-        return x_train,y_train,x_test,y_test,train_dataloader,test_dataloader
-
-    def vol_train(self,model, train_dataloader):
-        loss_func = torch.nn.MSELoss()
-        optimizer = torch.optim.Adam(model.parameters(),lr=0.001)
-
-        total_loss = 0
-        losses = []
-        for epoch in (range(10)):
-            for i, (examples,labels) in tqdm(enumerate(train_dataloader)):
-
-                optimizer.zero_grad()
-
-                y_predictions = model(examples.float())
-                loss = loss_func(y_predictions.float(),labels.float())
-
-                total_loss += loss.data
-
-                # back-prop to update the weights
-                loss.backward()
-                # optimizer steps based on lr
-                optimizer.step()
-
-                y_preds = y_predictions.cpu().detach().numpy()
-                y_preds = torch.tensor(y_preds)
-                #print(y_preds.shape)
-                #print("---> ", test)
-                #break
-
-            print ('Epoch [{}/{}], Loss: {}'.format(epoch+1, 100, loss.data))
-            #print(list(model.parameters()))
-            print("-----------------------------------------------------------------------------")
-            losses.append(loss.data)
-        return model,loss_func,total_loss,losses
-
-    def vol_test(self,model,criterion,test_dataloader,min_val,max_val):
-        test_loss = 0
-        accuracy = 0
-        all_predictions = []
-        for (examples, labels) in test_dataloader:
-            output = model.forward(examples.float())
-            un_normed_outputs = self.un_normalize(output, min_val,max_val)
-            all_predictions.append(un_normed_outputs.detach())
-            loss = criterion(output, labels.float()).item()
-            test_loss += loss
-        return test_loss, accuracy, all_predictions
-
-    def vol_prediction_visualization(self,predictions,actual,min_val,max_val):
-        for idx,item in enumerate(predictions):
-              predictions[idx] = np.asscalar(item.numpy())
-        print(predictions)
-        actual = self.un_normalize(actual,min_val,max_val,typelist=True)
-        print(actual)
-        plt.figure(figsize=(20,10))
-        plt.plot(np.array(actual),color='g')
-        plt.plot(np.array(predictions),color='#FFA500')
+def get_model_name():
+    minute = time.localtime().tm_min
+    hour = time.localtime().tm_hour
+    day = time.localtime().tm_mday
+    month = time.localtime().tm_mon
+    year = time.localtime().tm_year
+    name = str(year) + "_" + str(month) + "_" + str(day) + "_"+ str(hour) + "_" + str(minute) + "_price_predictor"
+    return name
 
 def main():
     
-    trainer = Trainer()
+    prepper = DataPrepper()
+    trainer = Trainer(DataPrepper=prepper)
 
-    # -- Preprocessing -- #
-    raw_price_data = trainer.fetch_latest_BTC_JSON()
-    data_df = trainer.parse_alphaV_JSON(raw_data=raw_price_data)
-    #data_df = data_df.iloc[::-1] # Flip data
 
-    # Seperating the y-data
-    prices = np.array(data_df['4a. close (USD)'].tolist())
-   
-    # Temporary dataframe for creating an extra normalizer for re-scaling inference values later
-    data_df_temp = data_df.drop(labels=['1a. open (USD)','1b. open (USD)','2b. high (USD)','3b. low (USD)','4a. close (USD)','4b. close (USD)','6. market cap (USD)'],axis=1) # ,'2a. high (USD)','3a. low (USD)'
-    minmax_2 = preprocessing.MinMaxScaler()
-    data_df_temp = pd.DataFrame(minmax_2.fit_transform(data_df_temp), columns=data_df_temp.columns)
-    
-    # -- Normalize the Data --
-    min_max_scaler = preprocessing.MinMaxScaler()
-    data_df = pd.DataFrame(min_max_scaler.fit_transform(data_df), columns=data_df.columns)
-    data_df = trainer.table_edit(data_df)
-    y_train = np.array(data_df['4a. close (USD)'].tolist())
-    data_df = data_df.drop(labels=['4a. close (USD)'],axis=1)
-    
-    data_df = data_df.drop(labels=['1a. open (USD)','6. market cap (USD)'],axis=1)
- 
-    model = TimeRNN(bat_size=config['batch_size'],
-                    in_features=3,
-                    h_size=config['lstm_hidden_size'],
-                    layer_amnt=config['lstm_num_layers']
-                    ) 
+    if(args.tcnn):
+        model = TimeCNN()
+    else:
+        model = TimeRNN(bat_size=config['batch_size'],
+                        in_features=3,
+                        h_size=config['lstm_hidden_size'],
+                        layer_amnt=config['lstm_num_layers']
+                        ) 
     #model = TimeCNN()
     #model = MLP(3)
 
-    losses, test_data_loader, loss_func, model, min_price, max_price, test_prices = trainer.train(model=model, 
-                                                                                                  x_data=data_df.values,
-                                                                                                  y_data=y_train,
-                                                                                                  original_prices=prices,
-                                                                                                  epochs=config['epochs']
-                                                                                                  )
+    losses, loss_func, model, min_price, max_price = trainer.train(model=model, 
+                                                                   train_data=trainer.train_dataloader,
+                                                                   original_prices=prepper.prices,
+                                                                   epochs=config['epochs']
+                                                                  )
     #trainer.loss_visualize(losses)
-    _, _, all_unnormed_outputs = trainer.validation_test(test_dataloader=test_data_loader,
+    _, _, all_unnormed_outputs = trainer.validation_test(test_dataloader=trainer.test_dataloader,
                                                          criterion=loss_func, 
                                                          model=model, 
                                                          norm_min=min_price, 
                                                          norm_max=max_price)
     
-    #trainer.prediction_visualization(minimum_price=min_price,maximum_price=max_price,close_prices=test_prices,model_predictions=all_unnormed_outputs)
-    return minmax_2,model,min_price,max_price
+    #trainer.prediction_visualization(minimum_price=min_price,maximum_price=max_price,close_prices=y_test,model_predictions=all_unnormed_outputs)
+    
+    return prepper.minmax_2,model,min_price,max_price,trainer.y_test,all_unnormed_outputs
 
 
 if __name__ == '__main__':
     
-    min_max_scaler,price_model,min_price,max_price = main()
+    min_max_scaler,price_model,min_price,max_price,norm_test_vals,predictions = main()
+
+    # -- Save Training Session Data (Test & Predictions) --
+    for idx,val in enumerate(predictions):
+        predictions[idx] = val.numpy().item()
+    predictions = np.array(predictions)
+    np.save('utils/test_data.npy',norm_test_vals)
+    np.save('utils/predictions.npy',predictions)
+    model_name = get_model_name()
     if(args.save == True):
         if(args.state_dict_pt == True):
             print('-- Saving Torch Model State Dictionary --')
-            torch.save(price_model.state_dict(),'models/price_predictor.pt')
+            torch.save(price_model.state_dict(),'models/'+model_name+".pt")
         elif(args.full_model_pt == True):
             print('-- Saving Torch Model --')
-            torch.save(price_model,'models/price_predictor.pt')
+            torch.save(price_model,'models/'+model_name+".pt")
         elif(args.onnx == True):
             print('-- Exporting to ONNX --')
             dummy_input = torch.tensor([[1, 2, 3]]).float()
-            model_path = os.path.join(args.output_dir, 'price_predictor.onnx')
+            model_path = os.path.join(args.output_dir, model_name+".onnx")
             torch.onnx.export(price_model, dummy_input, model_path)

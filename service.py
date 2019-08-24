@@ -14,7 +14,13 @@ import os
 import numpy as np
 import requests
 import pandas as pd
-from sklearn import preprocessing
+from utils.preprocessing import MinMaxScaler
+"""
+Flask JSON Endpoint Webservice
+
+Takes input from post request and preprocesses
+the data by post processing it
+"""
 
 app = Flask(__name__)
 
@@ -37,8 +43,8 @@ def preprocess(input_data):
     df = inf.parse_alphaV_JSON(raw_data=raw_data)
     prices = np.array(df['4a. close (USD)'].tolist())
     data_df_temp = df.drop(labels=['1a. open (USD)','1b. open (USD)','2b. high (USD)','3b. low (USD)','4a. close (USD)','4b. close (USD)','6. market cap (USD)'],axis=1)
-    minmax_2 = preprocessing.MinMaxScaler()
-    data_df_temp = pd.DataFrame(minmax_2.fit_transform(data_df_temp), columns=data_df_temp.columns)
+    minmax_2 = MinMaxScaler(data_df_temp.values)
+    data_df_temp = pd.DataFrame(minmax_2.fit_transform(), columns=data_df_temp.columns)
 
     minimum_price = np.min(prices)
     maximum_price = np.max(prices)

@@ -1,3 +1,8 @@
+# -- Alpha Vantage --
+alphakey : SAITMI5ZUMGEKGKY
+
+local_json_data : BTC_data.json
+
 model_save_loc : models/price_predictor.pt
 tensorboard_log_loc : models/tensorboard_logs/
 

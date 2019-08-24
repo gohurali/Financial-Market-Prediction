@@ -14,10 +14,42 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import urllib3
+import argparse
 import cryptocompare
 from datetime import datetime
+from models.architectures import MLP
 from models.architectures import TimeRNN
+from models.architectures import TimeCNN
 from utils.preprocessing import MinMaxScaler
+
+parser = argparse.ArgumentParser()
+# Takes the latest JSON file with BTC data
+parser.add_argument('--local',
+                    dest='local',
+                    action='store_true',
+                    help='used locally downloaded data JSON')
+parser.add_argument('--mlp',
+                    dest='mlp',
+                    action='store_true',
+                    help='opens a small mlp model')
+parser.add_argument('--tcnn',
+                    dest='tcnn',
+                    action='store_true',
+                    help='opens a temporal CNN model')   
+parser.add_argument('--trnn',
+                    dest='trnn',
+                    action='store_true',
+                    help='opens an 1 cell LSTM model')                        
+parser.add_argument('--low',
+                    dest='low',
+                    help='the market low for the time step')
+parser.add_argument('--high',
+                    dest='high',
+                    help='the market high for the time step')
+parser.add_argument('--volume',
+                    dest='volume',
+                    help='the volume for the time step')
+args = parser.parse_args()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -29,13 +61,58 @@ config = get_config()
 class Inferencer(object):
     def __init__(self):
         self.model = self.open_model()
+
+        if(not args.local):
+            self.minmax,self.prices = self.get_current_stats()
+        else:
+            self.minmax,self.prices = self.get_local_stats()
+            
+        self.minimum_price = np.min(self.prices)
+        self.maximum_price = np.max(self.prices)
     
     def open_model(self):
-        model = TimeRNN(bat_size=1,in_features=3,h_size=1,layer_amnt=1)
+        """Opens a state dict model for inference"""
+        if(args.mlp):
+            model = MLP(num_features=3)
+        elif(args.tcnn):
+            model = TimeCNN()
+        elif(args.trnn):
+            model = TimeRNN(bat_size=1,in_features=3,h_size=1,layer_amnt=1)
         model.load_state_dict(torch.load(config['model_save_loc']))
         #model = torch.load(config['model_save_loc'])
         model.eval()
         return model
+
+    def get_current_stats(self):
+        histPriceDay = cryptocompare.get_historical_price_day('BTC', curr='USD')
+
+        # Getting CryptoCompare BTC volume data -- 2000 API calls back 
+        self.vol = []
+        for idx, item in enumerate(histPriceDay['Data']):
+            self.vol.append(item['volumefrom']) 
+
+        raw_data = self.fetch_latest_BTC_JSON()
+        df = self.parse_alphaV_JSON(raw_data=raw_data)
+        prices = np.array(df['4a. close (USD)'].tolist())
+        data_df_temp = df.drop(labels=['1a. open (USD)','1b. open (USD)','2b. high (USD)','3b. low (USD)','4a. close (USD)','4b. close (USD)','6. market cap (USD)'],axis=1) # ,'2a. high (USD)','3a. low (USD)'
+        minmax = MinMaxScaler(data=data_df_temp.values)
+        data_df_temp = pd.DataFrame(minmax.fit_transform(), columns=data_df_temp.columns)
+        return minmax,prices
+    
+    def get_local_stats(self):
+
+        def fetch_local_data():
+            local_json = config['local_json_data']
+            with open(local_json) as f:
+                return json.load(f)
+        
+        raw_data = fetch_local_data()
+        df = self.parse_alphaV_JSON(raw_data=raw_data)
+        prices = np.array(df['4a. close (USD)'].tolist())
+        data_df_temp = df.drop(labels=['1a. open (USD)','1b. open (USD)','2b. high (USD)','3b. low (USD)','4a. close (USD)','4b. close (USD)','6. market cap (USD)'],axis=1) # ,'2a. high (USD)','3a. low (USD)'
+        minmax = MinMaxScaler(data=data_df_temp.values)
+        data_df_temp = pd.DataFrame(minmax.fit_transform(), columns=data_df_temp.columns)
+        return minmax,prices
 
     def un_normalize(self,norm_val,min_val,max_val,typelist=None):
         if(typelist):
@@ -66,6 +143,7 @@ class Inferencer(object):
         API_LINK = 'https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY&symbol=BTC&market=USD&apikey=SAITMI5ZUMGEKGKY'
         page = requests.get(API_LINK).json()
         return page
+
     def parse_alphaV_JSON(self,raw_data):
         # Remove meta data for now
         raw_data.pop('Meta Data',None)
@@ -123,36 +201,24 @@ class Inferencer(object):
             if(save):
                 plt.savefig(fname='images/prediction.png')
 
-    def get_previous_data(self):
-        pass
-
 def main():
 
     inf = Inferencer()
 
-    histPriceDay = cryptocompare.get_historical_price_day('BTC', curr='USD')
-
-    # Getting CryptoCompare BTC volume data -- 2000 API calls back 
-    vol = []
-    for idx, item in enumerate(histPriceDay['Data']):
-        vol.append(item['volumefrom']) 
-
-    raw_data = inf.fetch_latest_BTC_JSON()
-    df = inf.parse_alphaV_JSON(raw_data=raw_data)
-    prices = np.array(df['4a. close (USD)'].tolist())
-    data_df_temp = df.drop(labels=['1a. open (USD)','1b. open (USD)','2b. high (USD)','3b. low (USD)','4a. close (USD)','4b. close (USD)','6. market cap (USD)'],axis=1) # ,'2a. high (USD)','3a. low (USD)'
-    minmax_2 = MinMaxScaler(data=data_df_temp.values)
-    data_df_temp = pd.DataFrame(minmax_2.fit_transform(), columns=data_df_temp.columns)
-
-    minimum_price = np.min(prices)
-    maximum_price = np.max(prices)
-
-    output = inf.inference(value=[ [11000,11880,vol[-1]]],
-                       normalize_method=minmax_2,
-                       model=inf.model,
-                       minimum_price=minimum_price,
-                       maximum_price=maximum_price
-                      )
+    if(not args.local):
+        output = inf.inference(value=[ [float(args.low),float(args.high),float(args.volume)]],
+                        normalize_method=inf.minmax,
+                        model=inf.model,
+                        minimum_price=inf.minimum_price,
+                        maximum_price=inf.maximum_price
+                        )
+    else:
+        output = inf.inference(value=[ [11000,11880,inf.vol[-1]]],
+                        normalize_method=inf.minmax,
+                        model=inf.model,
+                        minimum_price=inf.minimum_price,
+                        maximum_price=inf.maximum_price
+                        )
     print('BTC prediction: ', output)
 
     # -- Load previous training session data --
@@ -160,7 +226,7 @@ def main():
     train_preds = np.load('utils/predictions.npy')
     #print('test_data= ',test_data)
     #print('train_preds= ', train_preds)	
-    test_data = inf.un_normalize(norm_val=test_data,min_val=minimum_price,max_val=maximum_price,typelist=True)
+    test_data = inf.un_normalize(norm_val=test_data,min_val=inf.minimum_price,max_val=inf.maximum_price,typelist=True)
     inf.prediction_visualize(save=True,
                              window=30,
                              test_vals=test_data,
