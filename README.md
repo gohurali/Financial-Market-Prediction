@@ -7,6 +7,7 @@ In this study, we look at cryptocurrency and stock price prediction by utilizing
 ### Dependencies
 This project requires you to install the following packages:
 * `torch`
+    * Depending on the version of python and your PC please install via instructions posted on https://pytorch.org/
 * `numpy`
 * `pandas`
 * `matplotlib`
